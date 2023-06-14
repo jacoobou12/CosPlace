@@ -14,6 +14,9 @@ CHANNELS_NUM_IN_LAST_CONV = {
     "ResNet101": 2048,
     "ResNet152": 2048,
     "VGG16": 512,
+    "EfficientNet_b0":192,
+    "AlexNet":256,
+    "EfficientNet_b2":208
 }
 
 
@@ -71,6 +74,20 @@ def get_backbone(backbone_name : str) -> Tuple[torch.nn.Module, int]:
             for p in layer.parameters():
                 p.requires_grad = False
         logging.debug("Train last layers of the VGG-16, freeze the previous ones")
+        
+    elif backbone_name == "AlexNet":
+        layers = list(backbone.features.children())[:-2]  # Remove avg pooling and FC layer
+        for layer in layers[:-7]:
+            for p in layer.parameters():
+                p.requires_grad = False
+        logging.debug("Train last layers of the AlexNet, freeze the previous ones")
+        
+    else:
+        layers = list(backbone.features.children())[:-2]  # Remove avg pooling and FC layer
+        for layer in layers[:-3]:
+            for p in layer.parameters():
+                p.requires_grad = False
+        logging.debug("Train last layers of the EfficientNet, freeze the previous ones")
     
     backbone = torch.nn.Sequential(*layers)
     

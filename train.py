@@ -14,6 +14,7 @@ import parser
 import commons
 import cosface_loss
 import augmentations
+import augmentationsV2
 from cosplace_model import cosplace_network
 from datasets.test_dataset import TestDataset
 from datasets.train_dataset import TrainDataset
@@ -43,7 +44,8 @@ model = model.to(args.device).train()
 
 #### Optimizer
 criterion = torch.nn.CrossEntropyLoss()
-model_optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+model_optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(model_optimizer, T_max = 1, eta_min = 0.00001)
 
 #### Datasets
 groups = [TrainDataset(args, args.train_set_folder, M=args.M, alpha=args.alpha, N=args.N, L=args.L,
@@ -88,6 +90,8 @@ if args.augmentation_device == "cuda":
                                                     hue=args.hue),
             augmentations.DeviceAgnosticRandomResizedCrop([512, 512],
                                                           scale=[1-args.random_resized_crop, 1]),
+            augmentationsV2.DeviceAgnosticRandomErasing(p=0.2),
+            augmentationsV2.DeviceAgnosticRandomRotation(degrees=5),
             T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
 
@@ -130,6 +134,7 @@ for epoch_num in range(start_epoch_num, args.epochs_num):
             del loss, output, images
             model_optimizer.step()
             classifiers_optimizers[current_group_num].step()
+            scheduler.step()
         else:  # Use AMP 16
             with torch.cuda.amp.autocast():
                 descriptors = model(images)
@@ -141,6 +146,7 @@ for epoch_num in range(start_epoch_num, args.epochs_num):
             scaler.step(model_optimizer)
             scaler.step(classifiers_optimizers[current_group_num])
             scaler.update()
+            scheduler.step()
     
     classifiers[current_group_num] = classifiers[current_group_num].cpu()
     util.move_to_device(classifiers_optimizers[current_group_num], "cpu")
